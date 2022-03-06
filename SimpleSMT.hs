@@ -39,7 +39,7 @@ module SimpleSMT
   , define
   , defineFun
   , defineFunRec
-  , defineFunsRec  
+  , defineFunsRec
   , assert
   , check
   , Result(..)
@@ -59,8 +59,8 @@ module SimpleSMT
   , quoteSymbol
   , symbol
   , keyword
-  , as 
-  
+  , as
+
     -- ** Types
   , tInt
   , tBool
@@ -162,6 +162,7 @@ import Numeric(showHex, readHex, showFFloat)
 data Result = Sat         -- ^ The assertions are satisfiable
             | Unsat       -- ^ The assertions are unsatisfiable
             | Unknown     -- ^ The result is inconclusive
+            | Timeout     -- ^ The solver timed out
               deriving (Eq,Show)
 
 -- | Common values returned by SMT solvers.
@@ -245,7 +246,7 @@ readSExpr :: String -> Maybe (SExpr, String)
 readSExpr (c : more) | isSpace c = readSExpr more
 readSExpr (';' : more) = readSExpr $ drop 1 $ dropWhile (/= '\n') more
 readSExpr ('|' : more) = do (sym, '|' : rest) <- pure (span ((/=) '|') more)
-                            Just (Atom ('|' : sym ++ ['|']), rest)                            
+                            Just (Atom ('|' : sym ++ ['|']), rest)
 readSExpr ('(' : more) = do (xs,more1) <- list more
                             return (List xs, more1)
   where
@@ -526,7 +527,7 @@ defineFunsRec proc ds = ackCommand proc $ fun "define-funs-rec" [ decls, bodies 
     decls  = List (map oneArg ds)
     bodies = List (map (\(_, _, _, body) -> body) ds)
 
-     
+
 -- | Assume a fact.
 assert :: Solver -> SExpr -> IO ()
 assert proc e = ackCommand proc $ fun "assert" [e]
@@ -539,9 +540,10 @@ check proc =
        Atom "unsat"   -> return Unsat
        Atom "unknown" -> return Unknown
        Atom "sat"     -> return Sat
+       Atom "timeout" -> return Timeout
        _ -> fail $ unlines
               [ "Unexpected result from the SMT solver:"
-              , "  Expected: unsat, unknown, or sat"
+              , "  Expected: unsat, unknown, sat, or timeout"
               , "  Result: " ++ showsSExpr res ""
               ]
 
@@ -665,7 +667,7 @@ isSimpleSymbol s@(c : _) = P.not (isDigit c) && all allowedSimpleChar s
 isSimpleSymbol _         = False
 
 quoteSymbol :: String -> String
-quoteSymbol s 
+quoteSymbol s
   | isSimpleSymbol s = s
   | otherwise        = '|' : s ++ "|"
 
@@ -1049,11 +1051,3 @@ newLogger l =
          logTab   = shouldLog (modifyIORef' tab (+ 2))
          logUntab = shouldLog (modifyIORef' tab (subtract 2))
      return Logger { .. }
-
-
-
-
-
-
-
-
